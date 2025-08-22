@@ -20,4 +20,4 @@ jobs:
           java-version: '24'
 
       - name: Run StompTestBench
-        run: java StompTestBench.java
+        run: java java/StompTestBench.java
