@@ -106,16 +106,24 @@ jobs:
           
           int main() {
               try {
-                  std::cout << "🔌 [C++] Connecting to Java server..." << std::endl;
-                  StompClient client("localhost", 61613);
+                  std::cout << "🔌 [C++] Creating client with credentials..." << std::endl;
+                  StompClient client("localhost", 61613, "cpp_client", "test123");
                   
-                  if (client.connect("cpp_client", "test123")) {
+                  std::cout << "🔌 [C++] Connecting to Java server..." << std::endl;
+                  auto future = client.connect();
+                  
+                  // Wait for connection with timeout
+                  if (future.wait_for(std::chrono::seconds(10)) == std::future_status::ready) {
                       std::cout << "✅ [C++] Connected to Java server!" << std::endl;
                       connection_success = true;
                       
+                      // Give connection time to fully establish
+                      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                      
                       // Subscribe to test queue
                       std::cout << "📡 [C++] Subscribing to /queue/cross-test..." << std::endl;
-                      client.subscribe("/queue/cross-test", onMessage);
+                      std::string subId = client.subscribe("/queue/cross-test", onMessage);
+                      std::cout << "✅ [C++] Subscribed with ID: " << subId << std::endl;
                       
                       // Send test messages
                       std::cout << "📤 [C++] Sending messages to Java server..." << std::endl;
@@ -124,6 +132,7 @@ jobs:
                       client.send("/queue/cross-test", "Cross-language test message 2");
                       
                       // Wait for any responses
+                      std::cout << "⏳ [C++] Waiting for message processing..." << std::endl;
                       std::this_thread::sleep_for(std::chrono::seconds(3));
                       
                       // Test different destinations
@@ -138,7 +147,7 @@ jobs:
                       std::cout << "🎉 [C++] Test completed successfully!" << std::endl;
                       
                   } else {
-                      std::cout << "❌ [C++] Failed to connect to Java server" << std::endl;
+                      std::cout << "❌ [C++] Connection timed out" << std::endl;
                       return 1;
                   }
               } catch (const std::exception& e) {
@@ -255,6 +264,7 @@ jobs:
           import java.util.concurrent.atomic.AtomicBoolean;
           import java.util.concurrent.CountDownLatch;
           import java.util.concurrent.TimeUnit;
+          import java.util.concurrent.CompletableFuture;
           
           public class CppServerTest {
               private static AtomicInteger receivedCount = new AtomicInteger(0);
@@ -263,44 +273,49 @@ jobs:
               
               public static void main(String[] args) {
                   try {
-                      System.out.println("🔌 [Java] Connecting to C++ server...");
-                      StompClient client = new StompClient("localhost", 61613);
+                      System.out.println("🔌 [Java] Creating client with credentials...");
+                      StompClient client = new StompClient("localhost", 61613, "java_client", "test123");
                       
-                      if (client.connect("java_client", "test123")) {
-                          System.out.println("✅ [Java] Connected to C++ server!");
-                          connectionSuccess.set(true);
-                          
-                          // Subscribe to test queue
-                          System.out.println("📡 [Java] Subscribing to /queue/cross-test...");
-                          client.subscribe("/queue/cross-test", (dest, body, headers) -> {
-                              System.out.println("📨 [Java] Received: " + body + " on " + dest);
-                              receivedCount.incrementAndGet();
-                          });
-                          
-                          // Send test messages
-                          System.out.println("📤 [Java] Sending messages to C++ server...");
-                          client.send("/queue/cross-test", "Hello C++ from Java!");
-                          client.send("/queue/cross-test", "Cross-language test message 1");
-                          client.send("/queue/cross-test", "Cross-language test message 2");
-                          
-                          // Wait for any responses
-                          Thread.sleep(3000);
-                          
-                          // Test different destinations
-                          client.send("/topic/broadcast", "Java broadcast message");
-                          
-                          Thread.sleep(2000);
-                          
-                          System.out.println("🔌 [Java] Disconnecting...");
-                          client.disconnect();
-                          
-                          System.out.println("📊 [Java] Messages received: " + receivedCount.get());
-                          System.out.println("🎉 [Java] Test completed successfully!");
-                          
-                      } else {
-                          System.out.println("❌ [Java] Failed to connect to C++ server");
-                          System.exit(1);
-                      }
+                      System.out.println("🔌 [Java] Connecting to C++ server...");
+                      CompletableFuture<Void> connectFuture = client.connect();
+                      
+                      // Wait for connection with timeout
+                      connectFuture.get(10, TimeUnit.SECONDS);
+                      System.out.println("✅ [Java] Connected to C++ server!");
+                      connectionSuccess.set(true);
+                      
+                      // Give connection time to fully establish
+                      Thread.sleep(500);
+                      
+                      // Subscribe to test queue
+                      System.out.println("📡 [Java] Subscribing to /queue/cross-test...");
+                      String subId = client.subscribe("/queue/cross-test", (dest, body, headers) -> {
+                          System.out.println("📨 [Java] Received: " + body + " on " + dest);
+                          receivedCount.incrementAndGet();
+                      });
+                      System.out.println("✅ [Java] Subscribed with ID: " + subId);
+                      
+                      // Send test messages
+                      System.out.println("📤 [Java] Sending messages to C++ server...");
+                      client.send("/queue/cross-test", "Hello C++ from Java!");
+                      client.send("/queue/cross-test", "Cross-language test message 1");
+                      client.send("/queue/cross-test", "Cross-language test message 2");
+                      
+                      // Wait for any responses
+                      System.out.println("⏳ [Java] Waiting for message processing...");
+                      Thread.sleep(3000);
+                      
+                      // Test different destinations
+                      client.send("/topic/broadcast", "Java broadcast message");
+                      
+                      Thread.sleep(2000);
+                      
+                      System.out.println("🔌 [Java] Disconnecting...");
+                      client.disconnect();
+                      
+                      System.out.println("📊 [Java] Messages received: " + receivedCount.get());
+                      System.out.println("🎉 [Java] Test completed successfully!");
+                      
                   } catch (Exception e) {
                       System.out.println("❌ [Java] Error: " + e.getMessage());
                       e.printStackTrace();
