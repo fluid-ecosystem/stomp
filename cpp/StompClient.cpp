@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <unistd.h>
 #include <cstring>
 
@@ -44,8 +45,16 @@ std::future<void> StompClient::connect() {
             serverAddr.sin_family = AF_INET;
             serverAddr.sin_port = htons(port_);
             
-            if (inet_pton(AF_INET, host_.c_str(), &serverAddr.sin_addr) <= 0) {
-                throw std::runtime_error("Invalid address/Address not supported");
+            // Handle hostname resolution
+            if (host_ == "localhost") {
+                serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+            } else if (inet_pton(AF_INET, host_.c_str(), &serverAddr.sin_addr) <= 0) {
+                // Try to resolve hostname
+                struct hostent* he = gethostbyname(host_.c_str());
+                if (he == nullptr) {
+                    throw std::runtime_error("Invalid address/Address not supported: " + host_);
+                }
+                serverAddr.sin_addr = *((struct in_addr*)he->h_addr);
             }
             
             // Connect to server
@@ -114,7 +123,9 @@ void StompClient::cleanup() {
         socket_ = -1;
     }
     
-    if (frameProcessorThread_.joinable()) {
+    // Only join if not called from the frame processor thread
+    if (frameProcessorThread_.joinable() && 
+        frameProcessorThread_.get_id() != std::this_thread::get_id()) {
         frameProcessorThread_.join();
     }
     
@@ -191,7 +202,7 @@ void StompClient::sendFrame(const StompFrame& frame) {
 
 void StompClient::readFrames() {
     try {
-        while (!shouldStop_ && connected_) {
+        while (!shouldStop_ && socket_ >= 0) {
             std::string frameData = readFrame();
             if (!frameData.empty()) {
                 auto frame = StompFrame::parse(frameData);
@@ -203,12 +214,20 @@ void StompClient::readFrames() {
             }
         }
     } catch (const std::exception& e) {
-        if (connected_) {
+        if (connected_ || connecting_) {
             std::cerr << "Frame reading error: " << e.what() << std::endl;
             notifyConnectionListener(false, "Connection lost: " + std::string(e.what()));
         }
     }
-    cleanup();
+    
+    // Mark as disconnected but don't call full cleanup from this thread
+    connected_ = false;
+    connecting_ = false;
+    
+    if (socket_ >= 0) {
+        ::close(socket_);
+        socket_ = -1;
+    }
 }
 
 std::string StompClient::readFrame() {

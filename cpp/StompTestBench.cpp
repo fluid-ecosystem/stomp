@@ -114,7 +114,16 @@ std::string ConnectionTracker::getLastReason() const {
 void StompTestBench::runAllTests() {
     try {
         // Start test server
+        std::cout << "About to start test server..." << std::endl;
+        std::cout.flush();
         startTestServer();
+        
+        std::cout << "Server started, waiting 1 second for full initialization..." << std::endl;
+        std::cout.flush();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+        std::cout << "Starting basic tests..." << std::endl;
+        std::cout.flush();
         
         // Basic functionality tests
         runBasicTests();
@@ -141,24 +150,49 @@ void StompTestBench::runAllTests() {
 
 void StompTestBench::startTestServer() {
     std::cout << "Starting test server on port " << TEST_PORT << "..." << std::endl;
+    std::cout.flush();
     
     server_ = std::make_unique<StompServer>(TEST_PORT);
+    
+    std::cout << "Created server object, starting thread..." << std::endl;
+    std::cout.flush();
+    
+    // Start server in detached thread (it runs forever)
     serverThread_ = std::thread([this]() {
         try {
+            std::cout << "Server thread: calling start()..." << std::endl;
+            std::cout.flush();
             server_->start();
+            std::cout << "Server thread: start() returned (this should never happen)" << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "Server error: " << e.what() << std::endl;
         }
     });
     
-    // Wait for server to start
+    std::cout << "Server thread created, detaching..." << std::endl;
+    std::cout.flush();
+    
+    // Detach the thread so we don't wait for it
+    serverThread_.detach();
+    
+    std::cout << "Thread detached, waiting for server to initialize..." << std::endl;
+    std::cout.flush();
+    
+    // Wait for server to initialize
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    
+    std::cout << "Wait complete, server should be ready!" << std::endl;
+    std::cout.flush();
+    
     std::cout << "Test server started successfully\n" << std::endl;
+    std::cout.flush();
 }
 
 void StompTestBench::runBasicTests() {
     std::cout << "RUNNING BASIC TESTS" << std::endl;
+    std::cout.flush();
     std::cout << std::string(40, '-') << std::endl;
+    std::cout.flush();
     
     testClientConnection();
     testBasicMessaging();
@@ -1065,8 +1099,6 @@ void StompTestBench::testConcurrentOperations() {
 
 std::unique_ptr<StompClient> StompTestBench::createClient() {
     auto client = std::make_unique<StompClient>(TEST_HOST, TEST_PORT);
-    std::lock_guard<std::mutex> lock(clientsMutex_);
-    clients_.push_back(std::unique_ptr<StompClient>());
     return client;
 }
 
@@ -1113,15 +1145,14 @@ void StompTestBench::cleanup() {
     if (server_) {
         try {
             server_->stop();
+            // Give server time to shut down gracefully
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         } catch (...) {
             // Ignore cleanup errors
         }
     }
     
-    // Wait for server thread
-    if (serverThread_.joinable()) {
-        serverThread_.join();
-    }
+    // Note: serverThread_ is detached, so we don't join it
     
     std::cout << "Cleanup completed." << std::endl;
 }
