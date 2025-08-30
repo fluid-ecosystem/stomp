@@ -11,7 +11,7 @@
     "clean": "rm -rf dist",
     "test": "node dist/StompTestBench.js",
     "server": "node dist/StompServer.js",
-    "client": "node dist/StompClientMain.js",
+    "client": "node dist/StompClientMain.js"
   },
   "keywords": ["stomp", "websocket", "messaging", "typescript"],
   "license": "MIT",
