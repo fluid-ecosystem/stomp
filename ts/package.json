@@ -5,6 +5,14 @@
   "main": "dist/index.js",
   "type": "module",
   "author": "Maifee Ul Asad<maifeeulasad@gmail.com>",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "node dist/StompTestBench.js",
+    "server": "node dist/StompServer.js",
+    "client": "node dist/StompClientMain.js",
+  },
   "keywords": ["stomp", "websocket", "messaging", "typescript"],
   "license": "MIT",
   "devDependencies": {
