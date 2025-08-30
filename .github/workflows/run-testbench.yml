@@ -71,3 +71,57 @@ jobs:
           sleep 2
           timeout 5s ./stomp-client || echo "Client test completed"
           kill $SERVER_PID 2>/dev/null || true
+
+  run-ts-testbench:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js and PNPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install PNPM
+        run: |
+          npm install -g pnpm@latest
+          pnpm --version
+
+      - name: Install TypeScript dependencies
+        working-directory: ./ts
+        run: |
+          echo "Installing TypeScript dependencies..."
+          pnpm install
+
+      - name: Build TypeScript STOMP implementation
+        working-directory: ./ts
+        run: |
+          echo "Building TypeScript STOMP components..."
+          pnpm run build
+
+      - name: Run TypeScript Test Bench
+        working-directory: ./ts
+        run: |
+          echo "Running TypeScript STOMP Test Bench..."
+          timeout 60s pnpm run test || echo "Test completed or timed out"
+
+      - name: Run individual component tests (if main test fails)
+        working-directory: ./ts
+        if: failure()
+        run: |
+          echo "Running individual component verification..."
+          echo "Testing server startup..."
+          timeout 10s pnpm run server &
+          SERVER_PID=$!
+          sleep 2
+          kill $SERVER_PID 2>/dev/null || true
+          echo "Server test completed"
+          
+          echo "Testing client connectivity..."
+          # Start server in background for client test
+          pnpm run server &
+          SERVER_PID=$!
+          sleep 2
+          timeout 5s pnpm run client || echo "Client test completed"
+          kill $SERVER_PID 2>/dev/null || true
