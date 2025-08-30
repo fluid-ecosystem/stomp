@@ -3,3 +3,6 @@
 *.class
 
 cpp/stomp-*
+
+ts/node_modules
+ts/dist
